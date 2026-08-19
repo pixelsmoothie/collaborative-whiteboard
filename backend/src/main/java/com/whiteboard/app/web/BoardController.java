@@ -9,14 +9,15 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/board")
 @CrossOrigin(origins = "*")
-public class BoardController {
-
+public class BoardController
+{
     private final S3Service s3Service;
 
     @Value("${aws.cloudfront.domain:}")
     private String cloudFrontDomain;
 
-    public BoardController(S3Service s3Service) {
+    public BoardController(S3Service s3Service)
+    {
         this.s3Service = s3Service;
     }
 
@@ -24,7 +25,8 @@ public class BoardController {
     public record SaveResponse(String key, String url) {}
 
     @PostMapping("/save")
-    public SaveResponse save(@RequestBody SaveRequest request) {
+    public SaveResponse save(@RequestBody SaveRequest request)
+    {
         String key = s3Service.uploadBoardImage(request.imageDataUrl());
         String url = cloudFrontDomain.isBlank()
                 ? key
@@ -33,7 +35,8 @@ public class BoardController {
     }
 
     @GetMapping("/health")
-    public Map<String, String> health() {
+    public Map<String, String> health()
+    {
         return Map.of("status", "ok");
     }
 }

@@ -7,17 +7,19 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 
 @Configuration
 @EnableWebSocket
-public class WebSocketConfig implements WebSocketConfigurer {
-
+public class WebSocketConfig implements WebSocketConfigurer
+{
     private final DrawingWebSocketHandler drawingWebSocketHandler;
 
-    public WebSocketConfig(DrawingWebSocketHandler drawingWebSocketHandler) {
+    public WebSocketConfig(DrawingWebSocketHandler drawingWebSocketHandler)
+    {
         this.drawingWebSocketHandler = drawingWebSocketHandler;
     }
 
     @Override
-    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        // /ws/board/{roomId} -- the room id is read from the URL by DrawingWebSocketHandler
+    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry)
+    {
+        //room id comes off the url, see DrawingWebSocketHandler.roomIdOf
         registry.addHandler(drawingWebSocketHandler, "/ws/board/*")
                 .setAllowedOriginPatterns("*");
     }

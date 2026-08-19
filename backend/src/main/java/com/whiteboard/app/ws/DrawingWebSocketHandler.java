@@ -11,47 +11,49 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Broadcasts every drawing message to other clients in the SAME room only.
- * The room id comes from the connection URL: /ws/board/{roomId}.
- * Message payload is opaque JSON produced by the frontend: {type, x, y, prevX, prevY, color, size}
- */
+//broadcasts to everyone in the SAME room only, room id comes off the connection url
 @Component
-public class DrawingWebSocketHandler extends TextWebSocketHandler {
+public class DrawingWebSocketHandler extends TextWebSocketHandler
+{
+    private final Map<String, Set<WebSocketSession>> rooms = new ConcurrentHashMap<>();      //roomId -> sessions in it
 
-    // roomId -> the sessions currently connected to that room
-    private final Map<String, Set<WebSocketSession>> rooms = new ConcurrentHashMap<>();
-
-    private String roomIdOf(WebSocketSession session) {
-        // path looks like /ws/board/{roomId} -> take the last path segment
+    private String roomIdOf(WebSocketSession session)
+    {
+        //path looks like /ws/board/{roomId}, just grab the last segment
         String path = session.getUri().getPath();
         return path.substring(path.lastIndexOf('/') + 1);
     }
 
     @Override
-    public void afterConnectionEstablished(WebSocketSession session) {
+    public void afterConnectionEstablished(WebSocketSession session)
+    {
         String roomId = roomIdOf(session);
         rooms.computeIfAbsent(roomId, id -> ConcurrentHashMap.newKeySet()).add(session);
     }
 
     @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws IOException {
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws IOException
+    {
         String roomId = roomIdOf(session);
         Set<WebSocketSession> peers = rooms.getOrDefault(roomId, Set.of());
-        for (WebSocketSession other : peers) {
-            if (!other.getId().equals(session.getId()) && other.isOpen()) {
+        for (WebSocketSession other : peers)
+        {
+            if (!other.getId().equals(session.getId()) && other.isOpen())
+            {
                 other.sendMessage(message);
             }
         }
     }
 
     @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status)
+    {
         String roomId = roomIdOf(session);
         Set<WebSocketSession> peers = rooms.get(roomId);
-        if (peers != null) {
+        if (peers != null)
+        {
             peers.remove(session);
-            if (peers.isEmpty()) rooms.remove(roomId);
+            if (peers.isEmpty()) rooms.remove(roomId);      //don't let dead rooms pile up
         }
     }
 }
