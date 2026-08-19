@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 
 export type CodeNodeData = {
@@ -12,13 +13,58 @@ export type CodeNodeData = {
 type Props = {
   node: CodeNodeData;
   onDragStart: (id: string, e: React.MouseEvent) => void;
+  onResizeStart: (id: string, e: React.MouseEvent) => void;
   onCodeChange: (id: string, code: string) => void;
   onClose: (id: string) => void;
 };
 
-// A draggable box that floats on top of the canvas with a Monaco editor inside --
-// like a ComfyUI node, but for showing/teaching code instead of pixels.
-export default function CodeNode({ node, onDragStart, onCodeChange, onClose }: Props) {
+// Runs `code` inside a sandboxed, same-origin-less iframe -- it can't touch
+// this page, cookies, or the network origin, only run plain JS and report back.
+function runInSandbox(code: string): Promise<string> {
+  return new Promise((resolve) => {
+    const iframe = document.createElement("iframe");
+    iframe.sandbox.add("allow-scripts");
+    iframe.style.display = "none";
+    iframe.srcdoc = `<script>
+      const lines = [];
+      const send = () => { parent.postMessage({ __sandboxResult: lines.join("\\n") }, "*"); };
+      ["log", "error", "warn"].forEach((m) => {
+        console[m] = (...args) => lines.push(args.map(String).join(" "));
+      });
+      try {
+        ${code}
+      } catch (err) {
+        lines.push("Error: " + err.message);
+      }
+      send();
+    </script>`;
+
+    function onMessage(e: MessageEvent) {
+      if (e.source !== iframe.contentWindow) return;
+      window.removeEventListener("message", onMessage);
+      iframe.remove();
+      resolve(e.data.__sandboxResult || "(no output)");
+    }
+    window.addEventListener("message", onMessage);
+    document.body.appendChild(iframe);
+  });
+}
+
+// A draggable, resizable box that floats on top of the canvas with a Monaco editor
+// inside -- like a ComfyUI node, but for showing/teaching code instead of pixels.
+export default function CodeNode({ node, onDragStart, onResizeStart, onCodeChange, onClose }: Props) {
+  const [output, setOutput] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+  const codeRef = useRef(node.code);
+  codeRef.current = node.code;
+
+  async function handleRun() {
+    setRunning(true);
+    const result = await runInSandbox(codeRef.current);
+    setOutput(result);
+    setRunning(false);
+  }
+
   return (
     <div
       className="absolute flex flex-col overflow-hidden rounded-md border border-gray-300 bg-white shadow-lg"
@@ -29,11 +75,17 @@ export default function CodeNode({ node, onDragStart, onCodeChange, onClose }: P
         onMouseDown={(e) => onDragStart(node.id, e)}
       >
         <span>Code</span>
-        <button onClick={() => onClose(node.id)} className="px-1 hover:text-red-400">
-          ✕
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleRun} disabled={running} className="px-1 hover:text-green-400 disabled:opacity-50">
+            {running ? "Running..." : "▶ Run"}
+          </button>
+          <button onClick={() => onClose(node.id)} className="px-1 hover:text-red-400">
+            ✕
+          </button>
+        </div>
       </div>
-      <div className="flex-1">
+
+      <div className="min-h-0 flex-1">
         <Editor
           language="javascript"
           value={node.code}
@@ -42,6 +94,19 @@ export default function CodeNode({ node, onDragStart, onCodeChange, onClose }: P
           options={{ minimap: { enabled: false }, fontSize: 13 }}
         />
       </div>
+
+      {output !== null && (
+        <div className="max-h-24 overflow-auto border-t border-gray-300 bg-black px-2 py-1 font-mono text-xs text-green-400">
+          {output}
+        </div>
+      )}
+
+      {/* Drag this corner to resize. Runs client-side only -- output isn't shared, just the code is. */}
+      <div
+        onMouseDown={(e) => onResizeStart(node.id, e)}
+        className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize"
+        style={{ background: "linear-gradient(135deg, transparent 50%, #9ca3af 50%)" }}
+      />
     </div>
   );
 }

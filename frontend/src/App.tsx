@@ -33,10 +33,11 @@ type DrawMsg = {
 // Code node messages -- these keep everyone's floating code boxes in sync.
 type NodeAddMsg = { type: "node-add"; node: CodeNodeData };
 type NodeMoveMsg = { type: "node-move"; id: string; x: number; y: number };
+type NodeResizeMsg = { type: "node-resize"; id: string; width: number; height: number };
 type NodeEditMsg = { type: "node-edit"; id: string; code: string };
 type NodeCloseMsg = { type: "node-close"; id: string };
 
-type BoardMsg = DrawMsg | NodeAddMsg | NodeMoveMsg | NodeEditMsg | NodeCloseMsg;
+type BoardMsg = DrawMsg | NodeAddMsg | NodeMoveMsg | NodeResizeMsg | NodeEditMsg | NodeCloseMsg;
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -53,8 +54,8 @@ export default function App() {
   const roomId = useRef(getRoomId()).current;
 
   const [nodes, setNodes] = useState<CodeNodeData[]>([]);
-  const dragId = useRef<string | null>(null);
-  const dragOffset = useRef({ x: 0, y: 0 });
+  // What's currently being dragged/resized, if anything, and where it started.
+  const action = useRef<{ mode: "move" | "resize"; id: string; startX: number; startY: number; origin: CodeNodeData } | null>(null);
 
   // Make the canvas fill its container and match its pixel size.
   useEffect(() => {
@@ -80,6 +81,8 @@ export default function App() {
           setNodes((prev) => [...prev, msg.node]);
         } else if (msg.type === "node-move") {
           setNodes((prev) => prev.map((n) => (n.id === msg.id ? { ...n, x: msg.x, y: msg.y } : n)));
+        } else if (msg.type === "node-resize") {
+          setNodes((prev) => prev.map((n) => (n.id === msg.id ? { ...n, width: msg.width, height: msg.height } : n)));
         } else if (msg.type === "node-edit") {
           setNodes((prev) => prev.map((n) => (n.id === msg.id ? { ...n, code: msg.code } : n)));
         } else if (msg.type === "node-close") {
@@ -183,21 +186,38 @@ export default function App() {
   function handleNodeDragStart(id: string, e: React.MouseEvent) {
     const node = nodes.find((n) => n.id === id);
     if (!node) return;
-    dragId.current = id;
-    dragOffset.current = { x: e.clientX - node.x, y: e.clientY - node.y };
+    action.current = { mode: "move", id, startX: e.clientX, startY: e.clientY, origin: node };
+  }
+
+  function handleNodeResizeStart(id: string, e: React.MouseEvent) {
+    e.stopPropagation(); // don't also trigger the header's drag handler
+    const node = nodes.find((n) => n.id === id);
+    if (!node) return;
+    action.current = { mode: "resize", id, startX: e.clientX, startY: e.clientY, origin: node };
   }
 
   useEffect(() => {
     function onMouseMove(e: MouseEvent) {
-      const id = dragId.current;
-      if (!id) return;
-      const x = e.clientX - dragOffset.current.x;
-      const y = e.clientY - dragOffset.current.y;
-      setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, x, y } : n)));
-      send({ type: "node-move", id, x, y });
+      const current = action.current;
+      if (!current) return;
+      const { mode, id, startX, startY, origin } = current;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+
+      if (mode === "move") {
+        const x = origin.x + dx;
+        const y = origin.y + dy;
+        setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, x, y } : n)));
+        send({ type: "node-move", id, x, y });
+      } else {
+        const width = Math.max(220, origin.width + dx);
+        const height = Math.max(140, origin.height + dy);
+        setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, width, height } : n)));
+        send({ type: "node-resize", id, width, height });
+      }
     }
     function onMouseUp() {
-      dragId.current = null;
+      action.current = null;
     }
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
@@ -205,7 +225,7 @@ export default function App() {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, [nodes]);
+  }, []);
 
   function handleNodeCodeChange(id: string, code: string) {
     setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, code } : n)));
@@ -282,6 +302,7 @@ export default function App() {
             key={node.id}
             node={node}
             onDragStart={handleNodeDragStart}
+            onResizeStart={handleNodeResizeStart}
             onCodeChange={handleNodeCodeChange}
             onClose={handleNodeClose}
           />
