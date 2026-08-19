@@ -272,6 +272,14 @@ export default function App() {
     setSaving(false);
   }
 
+  // No network round-trip needed -- just hands the browser a data URL and lets it save the file.
+  function handleDownload() {
+    const link = document.createElement("a");
+    link.href = canvasRef.current!.toDataURL("image/png");
+    link.download = `whiteboard-${roomId}.png`;
+    link.click();
+  }
+
   return (
     <div className="flex h-screen w-screen flex-col">
       <header className="border-b border-gray-200 px-4 py-3">
@@ -289,6 +297,7 @@ export default function App() {
         onSave={handleSave}
         saving={saving}
         savedUrl={savedUrl}
+        onDownload={handleDownload}
         onShare={handleShare}
         copied={copied}
         onAddCodeNode={handleAddCodeNode}

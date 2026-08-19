@@ -14,6 +14,7 @@ type Props = {
   onShare: () => void;
   copied: boolean;
   onAddCodeNode: () => void;
+  onDownload: () => void;
 };
 
 export default function Toolbar({
@@ -30,6 +31,7 @@ export default function Toolbar({
   onShare,
   copied,
   onAddCodeNode,
+  onDownload,
 }: Props) {
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3">
@@ -88,6 +90,12 @@ export default function Toolbar({
           className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100"
         >
           Clear
+        </button>
+        <button
+          onClick={onDownload}
+          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100"
+        >
+          Download
         </button>
         <button
           onClick={onSave}
