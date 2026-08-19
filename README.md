@@ -6,27 +6,7 @@ snapshotted to S3 and served back through CloudFront.
 
 ## Architecture
 
-```
- ┌────────────┐        WebSocket /ws/board        ┌────────────┐
- │  Browser A │ ───────────────────────────────▶  │            │
- │  (canvas)  │ ◀───────────────────────────────  │ Spring Boot│
- └────────────┘         broadcast draw events      │  Backend   │
-                                                    │            │
- ┌────────────┐                                    │  ┌──────┐  │
- │  Browser B │ ◀────────────────────────────────▶ │  │ WS   │  │
- │  (canvas)  │                                     │  │Handler│ │
- └────────────┘                                     │  └──────┘  │
-                                                     │  ┌──────┐  │
-        POST /api/board/save (PNG data URL)         │  │S3    │  │
-        ───────────────────────────────────────────▶│  │Client│──┼──▶ S3 Bucket
-                                                     │  └──────┘  │      │
-                                                     └────────────┘      ▼
-                                                                    CloudFront CDN
-                                                                          │
-                                                                          ▼
-                                                                  GET board image
-                                                                  (fast, cached)
-```
+<img width="1200" height="760" alt="image" src="https://github.com/user-attachments/assets/96701c63-9602-4da8-b02f-5b1e1ccbec7d" />
 
 ## Run locally
 
