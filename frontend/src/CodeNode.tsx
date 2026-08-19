@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
+import { Play, X } from "lucide-react";
 
 export type CodeNodeData = {
   id: string;
@@ -69,7 +70,7 @@ export default function CodeNode({ node, onDragStart, onResizeStart, onCodeChang
 
   return (
     <div
-      className="absolute flex flex-col overflow-hidden rounded-md border border-gray-300 bg-white shadow-lg"
+      className="absolute flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
       style={{ left: node.x, top: node.y, width: node.width, height: node.height }}
     >
       <div
@@ -77,12 +78,13 @@ export default function CodeNode({ node, onDragStart, onResizeStart, onCodeChang
         onMouseDown={(e) => onDragStart(node.id, e)}
       >
         <span>Code</span>
-        <div className="flex items-center gap-2">
-          <button onClick={handleRun} disabled={running} className="px-1 hover:text-green-400 disabled:opacity-50">
-            {running ? "Running..." : "▶ Run"}
+        <div className="flex items-center gap-3">
+          <button onClick={handleRun} disabled={running} className="flex items-center gap-1 hover:text-green-400 disabled:opacity-50">
+            <Play size={12} fill="currentColor" />
+            {running ? "Running..." : "Run"}
           </button>
-          <button onClick={() => onClose(node.id)} className="px-1 hover:text-red-400">
-            ✕
+          <button onClick={() => onClose(node.id)} className="hover:text-red-400">
+            <X size={14} />
           </button>
         </div>
       </div>

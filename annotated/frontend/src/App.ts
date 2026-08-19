@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Toolbar from "./Toolbar";
 import CodeNode, { type CodeNodeData } from "./CodeNode";
 
-// Change these if your backend runs somewhere else.
+// Same alias as the other files -- just React.createElement under a shorter name.
+const e = React.createElement;
+
 const API_URL = "https://skitch-board.onrender.com";
 const WS_URL = "wss://skitch-board.onrender.com/ws/board";
 
-// Everyone who opens the same ?room=<id> link ends up on the same board.
-// If the URL doesn't have one yet, make one up and stick it in the address bar.
 function getRoomId(): string {
   const params = new URLSearchParams(window.location.search);
   let roomId = params.get("room");
@@ -19,7 +19,6 @@ function getRoomId(): string {
   return roomId;
 }
 
-// A "draw" message is just: draw a line from (prevX, prevY) to (x, y).
 type DrawMsg = {
   type: "draw";
   prevX: number;
@@ -30,7 +29,6 @@ type DrawMsg = {
   size: number;
 };
 
-// Code node messages -- these keep everyone's floating code boxes in sync.
 type NodeAddMsg = { type: "node-add"; node: CodeNodeData };
 type NodeMoveMsg = { type: "node-move"; id: string; x: number; y: number };
 type NodeResizeMsg = { type: "node-resize"; id: string; width: number; height: number };
@@ -40,6 +38,10 @@ type NodeCloseMsg = { type: "node-close"; id: string };
 
 type BoardMsg = DrawMsg | NodeAddMsg | NodeMoveMsg | NodeResizeMsg | NodeEditMsg | NodeOutputMsg | NodeCloseMsg;
 
+// --- Everything from here down to the `return e(...)` at the very end is IDENTICAL logic to
+// App.tsx. None of the hooks, event handlers, or WebSocket code involve JSX -- JSX only ever
+// appeared in the final `return (...)` block, which is why that's the only part that changes
+// between the .tsx and .ts versions of this file. ---
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -55,17 +57,14 @@ export default function App() {
   const roomId = useRef(getRoomId()).current;
 
   const [nodes, setNodes] = useState<CodeNodeData[]>([]);
-  // What's currently being dragged/resized, if anything, and where it started.
   const action = useRef<{ mode: "move" | "resize"; id: string; startX: number; startY: number; origin: CodeNodeData } | null>(null);
 
-  // Make the canvas fill its container and match its pixel size.
   useEffect(() => {
     const canvas = canvasRef.current!;
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
   }, []);
 
-  // Open the WebSocket once. If it drops, keep retrying every second.
   useEffect(() => {
     let cancelled = false;
 
@@ -73,7 +72,6 @@ export default function App() {
       const socket = new WebSocket(`${WS_URL}/${roomId}`);
       socketRef.current = socket;
 
-      // A message arrived from another browser: apply it here too.
       socket.onmessage = (event) => {
         const msg: BoardMsg = JSON.parse(event.data);
         if (msg.type === "draw") {
@@ -105,7 +103,6 @@ export default function App() {
     };
   }, []);
 
-  // Draws one line segment on the canvas. Used for both local and remote strokes.
   function drawLine(prevX: number, prevY: number, x: number, y: number, strokeColor: string, strokeSize: number) {
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
@@ -118,10 +115,9 @@ export default function App() {
     ctx.stroke();
   }
 
-  // Works for both mouse events and touch events -- both have clientX/clientY.
-  function pointFromEvent(e: { clientX: number; clientY: number }) {
+  function pointFromEvent(ev: { clientX: number; clientY: number }) {
     const rect = canvasRef.current!.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    return { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
   }
 
   function startDrawing(point: { x: number; y: number }) {
@@ -131,16 +127,10 @@ export default function App() {
 
   function continueDrawing(point: { x: number; y: number }) {
     if (!isDrawing.current) return;
-
     const strokeColor = isEraser ? "#ffffff" : color;
     const strokeSize = isEraser ? Math.max(size, 20) : size;
-
-    // 1. Draw locally right away, so it feels instant.
     drawLine(lastPoint.current.x, lastPoint.current.y, point.x, point.y, strokeColor, strokeSize);
-
-    // 2. Tell everyone else to draw the same line.
     send({ type: "draw", prevX: lastPoint.current.x, prevY: lastPoint.current.y, x: point.x, y: point.y, color: strokeColor, size: strokeSize });
-
     lastPoint.current = point;
   }
 
@@ -148,23 +138,22 @@ export default function App() {
     isDrawing.current = false;
   }
 
-  function handleMouseDown(e: React.MouseEvent) {
-    startDrawing(pointFromEvent(e));
+  function handleMouseDown(ev: React.MouseEvent) {
+    startDrawing(pointFromEvent(ev));
   }
 
-  function handleMouseMove(e: React.MouseEvent) {
-    continueDrawing(pointFromEvent(e));
+  function handleMouseMove(ev: React.MouseEvent) {
+    continueDrawing(pointFromEvent(ev));
   }
 
-  // Touch events don't carry clientX/clientY directly -- pull it off the first touch point.
-  function handleTouchStart(e: React.TouchEvent) {
-    e.preventDefault();
-    startDrawing(pointFromEvent(e.touches[0]));
+  function handleTouchStart(ev: React.TouchEvent) {
+    ev.preventDefault();
+    startDrawing(pointFromEvent(ev.touches[0]));
   }
 
-  function handleTouchMove(e: React.TouchEvent) {
-    e.preventDefault();
-    continueDrawing(pointFromEvent(e.touches[0]));
+  function handleTouchMove(ev: React.TouchEvent) {
+    ev.preventDefault();
+    continueDrawing(pointFromEvent(ev.touches[0]));
   }
 
   function send(msg: BoardMsg) {
@@ -187,26 +176,26 @@ export default function App() {
     send({ type: "node-add", node });
   }
 
-  function handleNodeDragStart(id: string, e: React.MouseEvent) {
+  function handleNodeDragStart(id: string, ev: React.MouseEvent) {
     const node = nodes.find((n) => n.id === id);
     if (!node) return;
-    action.current = { mode: "move", id, startX: e.clientX, startY: e.clientY, origin: node };
+    action.current = { mode: "move", id, startX: ev.clientX, startY: ev.clientY, origin: node };
   }
 
-  function handleNodeResizeStart(id: string, e: React.MouseEvent) {
-    e.stopPropagation(); // don't also trigger the header's drag handler
+  function handleNodeResizeStart(id: string, ev: React.MouseEvent) {
+    ev.stopPropagation();
     const node = nodes.find((n) => n.id === id);
     if (!node) return;
-    action.current = { mode: "resize", id, startX: e.clientX, startY: e.clientY, origin: node };
+    action.current = { mode: "resize", id, startX: ev.clientX, startY: ev.clientY, origin: node };
   }
 
   useEffect(() => {
-    function onMouseMove(e: MouseEvent) {
+    function onMouseMove(ev: MouseEvent) {
       const current = action.current;
       if (!current) return;
       const { mode, id, startX, startY, origin } = current;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
 
       if (mode === "move") {
         const x = origin.x + dx;
@@ -260,19 +249,16 @@ export default function App() {
   async function handleSave() {
     setSaving(true);
     const imageDataUrl = canvasRef.current!.toDataURL("image/png");
-
     const res = await fetch(`${API_URL}/api/board/save`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ imageDataUrl }),
     });
     const data = await res.json();
-
     setSavedUrl(data.url);
     setSaving(false);
   }
 
-  // No network round-trip needed -- just hands the browser a data URL and lets it save the file.
   function handleDownload() {
     const link = document.createElement("a");
     link.href = canvasRef.current!.toDataURL("image/png");
@@ -280,55 +266,65 @@ export default function App() {
     link.click();
   }
 
-  return (
-    <div className="relative h-screen w-screen overflow-hidden bg-gray-100">
-      <div className="pointer-events-none absolute left-4 top-4 z-10 text-sm font-semibold text-gray-500">
-        Skitch Board
-      </div>
+  // --- Here's the part that actually changes: the JSX return block, desugared to nested
+  // e() = React.createElement() calls. Compare this shape directly against App.tsx's return
+  // statement -- every <tag prop={x}>child</tag> became e("tag", {prop: x}, child). ---
+  return e(
+    "div",
+    { className: "flex h-screen w-screen flex-col" },
 
-      <div className="absolute left-1/2 top-4 z-10 -translate-x-1/2">
-        <Toolbar
-          color={color}
-          onColorChange={setColor}
-          size={size}
-          onSizeChange={setSize}
-          isEraser={isEraser}
-          onToggleEraser={() => setIsEraser((prev) => !prev)}
-          onClear={handleClear}
-          onSave={handleSave}
-          saving={saving}
-          savedUrl={savedUrl}
-          onDownload={handleDownload}
-          onShare={handleShare}
-          copied={copied}
-          onAddCodeNode={handleAddCodeNode}
-        />
-      </div>
+    e(
+      "header",
+      { className: "border-b border-gray-200 px-4 py-3" },
+      e("h1", { className: "text-lg font-semibold" }, "Collaborative Whiteboard")
+    ),
 
-      <div className="relative h-full w-full">
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0 h-full w-full touch-none cursor-crosshair bg-white"
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={stopDrawing}
-          onMouseLeave={stopDrawing}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={stopDrawing}
-        />
-        {nodes.map((node) => (
-          <CodeNode
-            key={node.id}
-            node={node}
-            onDragStart={handleNodeDragStart}
-            onResizeStart={handleNodeResizeStart}
-            onCodeChange={handleNodeCodeChange}
-            onRun={handleNodeRun}
-            onClose={handleNodeClose}
-          />
-        ))}
-      </div>
-    </div>
+    // Toolbar is a component (imported function), so it's passed as the TYPE argument here,
+    // and its props object lists everything App.tsx used to pass as JSX attributes.
+    e(Toolbar, {
+      color,
+      onColorChange: setColor,
+      size,
+      onSizeChange: setSize,
+      isEraser,
+      onToggleEraser: () => setIsEraser((prev) => !prev),
+      onClear: handleClear,
+      onSave: handleSave,
+      saving,
+      savedUrl,
+      onDownload: handleDownload,
+      onShare: handleShare,
+      copied,
+      onAddCodeNode: handleAddCodeNode,
+    }),
+
+    e(
+      "div",
+      { className: "relative flex-1 overflow-hidden" },
+      e("canvas", {
+        ref: canvasRef,
+        className: "absolute inset-0 h-full w-full touch-none cursor-crosshair bg-white",
+        onMouseDown: handleMouseDown,
+        onMouseMove: handleMouseMove,
+        onMouseUp: stopDrawing,
+        onMouseLeave: stopDrawing,
+        onTouchStart: handleTouchStart,
+        onTouchMove: handleTouchMove,
+        onTouchEnd: stopDrawing,
+      }),
+      // The JSX "{nodes.map((node) => <CodeNode .../>)}" becomes exactly this: an array of
+      // e(CodeNode, {...}) calls, passed as a single child argument to the outer e("div", ...).
+      nodes.map((node) =>
+        e(CodeNode, {
+          key: node.id,
+          node,
+          onDragStart: handleNodeDragStart,
+          onResizeStart: handleNodeResizeStart,
+          onCodeChange: handleNodeCodeChange,
+          onRun: handleNodeRun,
+          onClose: handleNodeClose,
+        })
+      )
+    )
   );
 }
