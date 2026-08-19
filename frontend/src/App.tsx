@@ -5,6 +5,19 @@ import Toolbar from "./Toolbar";
 const API_URL = "https://skitch-board.onrender.com";
 const WS_URL = "wss://skitch-board.onrender.com/ws/board";
 
+// Everyone who opens the same ?room=<id> link ends up on the same board.
+// If the URL doesn't have one yet, make one up and stick it in the address bar.
+function getRoomId(): string {
+  const params = new URLSearchParams(window.location.search);
+  let roomId = params.get("room");
+  if (!roomId) {
+    roomId = Math.random().toString(36).slice(2, 10);
+    params.set("room", roomId);
+    window.history.replaceState(null, "", `?${params.toString()}`);
+  }
+  return roomId;
+}
+
 // A "draw" message is just: draw a line from (prevX, prevY) to (x, y).
 type DrawMsg = {
   type: "draw";
@@ -27,6 +40,8 @@ export default function App() {
   const [isEraser, setIsEraser] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedUrl, setSavedUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const roomId = useRef(getRoomId()).current;
 
   // Make the canvas fill its container and match its pixel size.
   useEffect(() => {
@@ -40,7 +55,7 @@ export default function App() {
     let cancelled = false;
 
     function connect() {
-      const socket = new WebSocket(WS_URL);
+      const socket = new WebSocket(`${WS_URL}/${roomId}`);
       socketRef.current = socket;
 
       // A message arrived from another browser: draw it here too.
@@ -74,20 +89,20 @@ export default function App() {
     ctx.stroke();
   }
 
-  function pointFromEvent(e: React.MouseEvent) {
+  // Works for both mouse events and touch events -- both have clientX/clientY.
+  function pointFromEvent(e: { clientX: number; clientY: number }) {
     const rect = canvasRef.current!.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }
 
-  function handleMouseDown(e: React.MouseEvent) {
+  function startDrawing(point: { x: number; y: number }) {
     isDrawing.current = true;
-    lastPoint.current = pointFromEvent(e);
+    lastPoint.current = point;
   }
 
-  function handleMouseMove(e: React.MouseEvent) {
+  function continueDrawing(point: { x: number; y: number }) {
     if (!isDrawing.current) return;
 
-    const point = pointFromEvent(e);
     const strokeColor = isEraser ? "#ffffff" : color;
     const strokeSize = isEraser ? Math.max(size, 20) : size;
 
@@ -103,8 +118,33 @@ export default function App() {
     lastPoint.current = point;
   }
 
-  function handleMouseUp() {
+  function stopDrawing() {
     isDrawing.current = false;
+  }
+
+  function handleMouseDown(e: React.MouseEvent) {
+    startDrawing(pointFromEvent(e));
+  }
+
+  function handleMouseMove(e: React.MouseEvent) {
+    continueDrawing(pointFromEvent(e));
+  }
+
+  // Touch events don't carry clientX/clientY directly -- pull it off the first touch point.
+  function handleTouchStart(e: React.TouchEvent) {
+    e.preventDefault();
+    startDrawing(pointFromEvent(e.touches[0]));
+  }
+
+  function handleTouchMove(e: React.TouchEvent) {
+    e.preventDefault();
+    continueDrawing(pointFromEvent(e.touches[0]));
+  }
+
+  function handleShare() {
+    navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
 
   function handleClear() {
@@ -144,15 +184,20 @@ export default function App() {
         onSave={handleSave}
         saving={saving}
         savedUrl={savedUrl}
+        onShare={handleShare}
+        copied={copied}
       />
 
       <canvas
         ref={canvasRef}
-        className="flex-1 cursor-crosshair bg-white"
+        className="flex-1 touch-none cursor-crosshair bg-white"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onMouseUp={stopDrawing}
+        onMouseLeave={stopDrawing}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={stopDrawing}
       />
     </div>
   );

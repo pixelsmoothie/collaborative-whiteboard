@@ -17,7 +17,8 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        registry.addHandler(drawingWebSocketHandler, "/ws/board")
+        // /ws/board/{roomId} -- the room id is read from the URL by DrawingWebSocketHandler
+        registry.addHandler(drawingWebSocketHandler, "/ws/board/*")
                 .setAllowedOriginPatterns("*");
     }
 }

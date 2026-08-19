@@ -11,6 +11,8 @@ type Props = {
   onSave: () => void;
   saving: boolean;
   savedUrl: string | null;
+  onShare: () => void;
+  copied: boolean;
 };
 
 export default function Toolbar({
@@ -24,6 +26,8 @@ export default function Toolbar({
   onSave,
   saving,
   savedUrl,
+  onShare,
+  copied,
 }: Props) {
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3">
@@ -65,6 +69,12 @@ export default function Toolbar({
       </label>
 
       <div className="ml-auto flex items-center gap-2">
+        <button
+          onClick={onShare}
+          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100"
+        >
+          {copied ? "Link copied!" : "Share Board"}
+        </button>
         <button
           onClick={onClear}
           className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100"

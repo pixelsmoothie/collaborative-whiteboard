@@ -8,25 +8,37 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Broadcasts every drawing message to all other connected clients.
+ * Broadcasts every drawing message to other clients in the SAME room only.
+ * The room id comes from the connection URL: /ws/board/{roomId}.
  * Message payload is opaque JSON produced by the frontend: {type, x, y, prevX, prevY, color, size}
  */
 @Component
 public class DrawingWebSocketHandler extends TextWebSocketHandler {
 
-    private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
+    // roomId -> the sessions currently connected to that room
+    private final Map<String, Set<WebSocketSession>> rooms = new ConcurrentHashMap<>();
+
+    private String roomIdOf(WebSocketSession session) {
+        // path looks like /ws/board/{roomId} -> take the last path segment
+        String path = session.getUri().getPath();
+        return path.substring(path.lastIndexOf('/') + 1);
+    }
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
-        sessions.put(session.getId(), session);
+        String roomId = roomIdOf(session);
+        rooms.computeIfAbsent(roomId, id -> ConcurrentHashMap.newKeySet()).add(session);
     }
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws IOException {
-        for (WebSocketSession other : sessions.values()) {
+        String roomId = roomIdOf(session);
+        Set<WebSocketSession> peers = rooms.getOrDefault(roomId, Set.of());
+        for (WebSocketSession other : peers) {
             if (!other.getId().equals(session.getId()) && other.isOpen()) {
                 other.sendMessage(message);
             }
@@ -35,6 +47,11 @@ public class DrawingWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
-        sessions.remove(session.getId());
+        String roomId = roomIdOf(session);
+        Set<WebSocketSession> peers = rooms.get(roomId);
+        if (peers != null) {
+            peers.remove(session);
+            if (peers.isEmpty()) rooms.remove(roomId);
+        }
     }
 }
