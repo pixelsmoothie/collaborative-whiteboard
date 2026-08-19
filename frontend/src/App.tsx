@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import Toolbar from "./Toolbar";
 
 // Change these if your backend runs somewhere else.
-const API_URL = "http://localhost:8080";
-const WS_URL = "ws://localhost:8080/ws/board";
+const API_URL = "https://skitch-board.onrender.com";
+const WS_URL = "wss://skitch-board.onrender.com/ws/board";
 
 // A "draw" message is just: draw a line from (prevX, prevY) to (x, y).
 type DrawMsg = {
