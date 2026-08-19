@@ -55,6 +55,7 @@ export default function App()
 
     const [nodes, setNodes] = useState<CodeNodeData[]>([]);
     const action = useRef<{ mode: "move" | "resize"; id: string; startX: number; startY: number; origin: CodeNodeData } | null>(null);
+    const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     //buffer only matches its CSS size once at mount by default -- resize would desync it,
     //so this snapshots + redraws on every actual resize (window resize, zoom, whatever)
@@ -142,6 +143,25 @@ export default function App()
         };
     }, []);
 
+    //on joining a room, load whatever was last auto-saved so it doesn't start blank
+    useEffect(() =>
+    {
+        fetch(`${API_URL}/api/board/${roomId}/image`)
+            .then((res) => (res.ok ? res.blob() : null))
+            .then((blob) =>
+            {
+                if (!blob) return;      //nothing saved for this room yet, that's fine
+                const url = URL.createObjectURL(blob);
+                const img = new Image();
+                img.onload = () =>
+                {
+                    canvasRef.current?.getContext("2d")?.drawImage(img, 0, 0);
+                    URL.revokeObjectURL(url);
+                };
+                img.src = url;
+            });
+    }, []);
+
     function drawLine(prevX: number, prevY: number, x: number, y: number, strokeColor: string, strokeSize: number)
     {
         const ctx = canvasRef.current?.getContext("2d");
@@ -182,6 +202,7 @@ export default function App()
 
     function stopDrawing()
     {
+        if (isDrawing.current) scheduleAutoSave();      //only if a stroke actually happened
         isDrawing.current = false;
     }
 
@@ -305,20 +326,31 @@ export default function App()
         canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
     }
 
-    async function handleSave()
+    async function saveSnapshot()
     {
-        setSaving(true);
         const imageDataUrl = canvasRef.current!.toDataURL("image/png");
-
         const res = await fetch(`${API_URL}/api/board/save`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ imageDataUrl }),
+            body: JSON.stringify({ roomId, imageDataUrl }),
         });
-        const data = await res.json();
+        return res.json();
+    }
 
+    async function handleSave()
+    {
+        setSaving(true);
+        const data = await saveSnapshot();
         setSavedUrl(data.url);
         setSaving(false);
+    }
+
+    //fires ~3s after the last stroke, quietly, no UI feedback -- keeps the room's snapshot
+    //fresh so a late joiner doesn't land on a blank canvas
+    function scheduleAutoSave()
+    {
+        if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = setTimeout(() => { saveSnapshot(); }, 3000);
     }
 
     function handleDownload()
