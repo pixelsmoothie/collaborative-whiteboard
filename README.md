@@ -6,7 +6,8 @@ snapshotted to S3 and served back through CloudFront.
 
 ## Architecture
 
-<img width="1200" height="760" alt="image" src="https://github.com/user-attachments/assets/96701c63-9602-4da8-b02f-5b1e1ccbec7d" />
+<img width="1500" height="906" alt="image" src="https://github.com/user-attachments/assets/569def98-5914-46fd-a617-640aaeb83c9a" />
+
 
 ## Run locally
 
