@@ -8,6 +8,7 @@ export type CodeNodeData = {
   width: number;
   height: number;
   code: string;
+  output: string | null;
 };
 
 type Props = {
@@ -16,6 +17,7 @@ type Props = {
   onResizeStart: (id: string, e: React.MouseEvent) => void;
   onCodeChange: (id: string, code: string) => void;
   onClose: (id: string) => void;
+  onRun: (id: string, output: string) => void;
 };
 
 // Runs `code` inside a sandboxed, same-origin-less iframe -- it can't touch
@@ -52,8 +54,8 @@ function runInSandbox(code: string): Promise<string> {
 
 // A draggable, resizable box that floats on top of the canvas with a Monaco editor
 // inside -- like a ComfyUI node, but for showing/teaching code instead of pixels.
-export default function CodeNode({ node, onDragStart, onResizeStart, onCodeChange, onClose }: Props) {
-  const [output, setOutput] = useState<string | null>(null);
+export default function CodeNode({ node, onDragStart, onResizeStart, onCodeChange, onClose, onRun }: Props) {
+  // "Running" only matters to whoever clicked Run -- no need to sync that part.
   const [running, setRunning] = useState(false);
   const codeRef = useRef(node.code);
   codeRef.current = node.code;
@@ -61,7 +63,7 @@ export default function CodeNode({ node, onDragStart, onResizeStart, onCodeChang
   async function handleRun() {
     setRunning(true);
     const result = await runInSandbox(codeRef.current);
-    setOutput(result);
+    onRun(node.id, result); // broadcasts the output text to everyone in the room
     setRunning(false);
   }
 
@@ -95,13 +97,13 @@ export default function CodeNode({ node, onDragStart, onResizeStart, onCodeChang
         />
       </div>
 
-      {output !== null && (
+      {node.output !== null && (
         <div className="max-h-24 overflow-auto border-t border-gray-300 bg-black px-2 py-1 font-mono text-xs text-green-400">
-          {output}
+          {node.output}
         </div>
       )}
 
-      {/* Drag this corner to resize. Runs client-side only -- output isn't shared, just the code is. */}
+      {/* Drag this corner to resize. */}
       <div
         onMouseDown={(e) => onResizeStart(node.id, e)}
         className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize"

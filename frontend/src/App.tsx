@@ -35,9 +35,10 @@ type NodeAddMsg = { type: "node-add"; node: CodeNodeData };
 type NodeMoveMsg = { type: "node-move"; id: string; x: number; y: number };
 type NodeResizeMsg = { type: "node-resize"; id: string; width: number; height: number };
 type NodeEditMsg = { type: "node-edit"; id: string; code: string };
+type NodeOutputMsg = { type: "node-output"; id: string; output: string };
 type NodeCloseMsg = { type: "node-close"; id: string };
 
-type BoardMsg = DrawMsg | NodeAddMsg | NodeMoveMsg | NodeResizeMsg | NodeEditMsg | NodeCloseMsg;
+type BoardMsg = DrawMsg | NodeAddMsg | NodeMoveMsg | NodeResizeMsg | NodeEditMsg | NodeOutputMsg | NodeCloseMsg;
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -85,6 +86,8 @@ export default function App() {
           setNodes((prev) => prev.map((n) => (n.id === msg.id ? { ...n, width: msg.width, height: msg.height } : n)));
         } else if (msg.type === "node-edit") {
           setNodes((prev) => prev.map((n) => (n.id === msg.id ? { ...n, code: msg.code } : n)));
+        } else if (msg.type === "node-output") {
+          setNodes((prev) => prev.map((n) => (n.id === msg.id ? { ...n, output: msg.output } : n)));
         } else if (msg.type === "node-close") {
           setNodes((prev) => prev.filter((n) => n.id !== msg.id));
         }
@@ -178,6 +181,7 @@ export default function App() {
       width: 420,
       height: 280,
       code: "// start typing...\n",
+      output: null,
     };
     setNodes((prev) => [...prev, node]);
     send({ type: "node-add", node });
@@ -230,6 +234,11 @@ export default function App() {
   function handleNodeCodeChange(id: string, code: string) {
     setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, code } : n)));
     send({ type: "node-edit", id, code });
+  }
+
+  function handleNodeRun(id: string, output: string) {
+    setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, output } : n)));
+    send({ type: "node-output", id, output });
   }
 
   function handleNodeClose(id: string) {
@@ -304,6 +313,7 @@ export default function App() {
             onDragStart={handleNodeDragStart}
             onResizeStart={handleNodeResizeStart}
             onCodeChange={handleNodeCodeChange}
+            onRun={handleNodeRun}
             onClose={handleNodeClose}
           />
         ))}
