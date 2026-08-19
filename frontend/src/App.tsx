@@ -58,11 +58,24 @@ export default function App() {
   // What's currently being dragged/resized, if anything, and where it started.
   const action = useRef<{ mode: "move" | "resize"; id: string; startX: number; startY: number; origin: CodeNodeData } | null>(null);
 
-  // Make the canvas fill its container and match its pixel size.
+  // Keep the canvas's drawing buffer matched to its visible size -- resizing the buffer wipes
+  // it, so we snapshot and redraw whatever was already there. Runs on mount and whenever the
+  // visible size changes (window resize, browser zoom), not just once.
   useEffect(() => {
     const canvas = canvasRef.current!;
-    canvas.width = canvas.clientWidth;
-    canvas.height = canvas.clientHeight;
+    const resize = () => {
+      const snapshot = document.createElement("canvas");
+      snapshot.width = canvas.width;
+      snapshot.height = canvas.height;
+      snapshot.getContext("2d")?.drawImage(canvas, 0, 0);
+      canvas.width = canvas.clientWidth;
+      canvas.height = canvas.clientHeight;
+      canvas.getContext("2d")?.drawImage(snapshot, 0, 0);
+    };
+    resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas);
+    return () => observer.disconnect();
   }, []);
 
   // Open the WebSocket once. If it drops, keep retrying every second.
