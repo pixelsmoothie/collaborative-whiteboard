@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Toolbar from "./Toolbar";
+import CodeNode, { type CodeNodeData } from "./CodeNode";
 
 // Change these if your backend runs somewhere else.
 const API_URL = "https://skitch-board.onrender.com";
@@ -29,6 +30,14 @@ type DrawMsg = {
   size: number;
 };
 
+// Code node messages -- these keep everyone's floating code boxes in sync.
+type NodeAddMsg = { type: "node-add"; node: CodeNodeData };
+type NodeMoveMsg = { type: "node-move"; id: string; x: number; y: number };
+type NodeEditMsg = { type: "node-edit"; id: string; code: string };
+type NodeCloseMsg = { type: "node-close"; id: string };
+
+type BoardMsg = DrawMsg | NodeAddMsg | NodeMoveMsg | NodeEditMsg | NodeCloseMsg;
+
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -42,6 +51,10 @@ export default function App() {
   const [savedUrl, setSavedUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const roomId = useRef(getRoomId()).current;
+
+  const [nodes, setNodes] = useState<CodeNodeData[]>([]);
+  const dragId = useRef<string | null>(null);
+  const dragOffset = useRef({ x: 0, y: 0 });
 
   // Make the canvas fill its container and match its pixel size.
   useEffect(() => {
@@ -58,10 +71,20 @@ export default function App() {
       const socket = new WebSocket(`${WS_URL}/${roomId}`);
       socketRef.current = socket;
 
-      // A message arrived from another browser: draw it here too.
+      // A message arrived from another browser: apply it here too.
       socket.onmessage = (event) => {
-        const msg: DrawMsg = JSON.parse(event.data);
-        drawLine(msg.prevX, msg.prevY, msg.x, msg.y, msg.color, msg.size);
+        const msg: BoardMsg = JSON.parse(event.data);
+        if (msg.type === "draw") {
+          drawLine(msg.prevX, msg.prevY, msg.x, msg.y, msg.color, msg.size);
+        } else if (msg.type === "node-add") {
+          setNodes((prev) => [...prev, msg.node]);
+        } else if (msg.type === "node-move") {
+          setNodes((prev) => prev.map((n) => (n.id === msg.id ? { ...n, x: msg.x, y: msg.y } : n)));
+        } else if (msg.type === "node-edit") {
+          setNodes((prev) => prev.map((n) => (n.id === msg.id ? { ...n, code: msg.code } : n)));
+        } else if (msg.type === "node-close") {
+          setNodes((prev) => prev.filter((n) => n.id !== msg.id));
+        }
       };
 
       socket.onclose = () => {
@@ -109,11 +132,8 @@ export default function App() {
     // 1. Draw locally right away, so it feels instant.
     drawLine(lastPoint.current.x, lastPoint.current.y, point.x, point.y, strokeColor, strokeSize);
 
-    // 2. Tell everyone else to draw the same line (only if the connection is actually open).
-    const msg: DrawMsg = { type: "draw", prevX: lastPoint.current.x, prevY: lastPoint.current.y, x: point.x, y: point.y, color: strokeColor, size: strokeSize };
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify(msg));
-    }
+    // 2. Tell everyone else to draw the same line.
+    send({ type: "draw", prevX: lastPoint.current.x, prevY: lastPoint.current.y, x: point.x, y: point.y, color: strokeColor, size: strokeSize });
 
     lastPoint.current = point;
   }
@@ -139,6 +159,62 @@ export default function App() {
   function handleTouchMove(e: React.TouchEvent) {
     e.preventDefault();
     continueDrawing(pointFromEvent(e.touches[0]));
+  }
+
+  function send(msg: BoardMsg) {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify(msg));
+    }
+  }
+
+  function handleAddCodeNode() {
+    const node: CodeNodeData = {
+      id: Math.random().toString(36).slice(2, 10),
+      x: 80,
+      y: 80,
+      width: 420,
+      height: 280,
+      code: "// start typing...\n",
+    };
+    setNodes((prev) => [...prev, node]);
+    send({ type: "node-add", node });
+  }
+
+  function handleNodeDragStart(id: string, e: React.MouseEvent) {
+    const node = nodes.find((n) => n.id === id);
+    if (!node) return;
+    dragId.current = id;
+    dragOffset.current = { x: e.clientX - node.x, y: e.clientY - node.y };
+  }
+
+  useEffect(() => {
+    function onMouseMove(e: MouseEvent) {
+      const id = dragId.current;
+      if (!id) return;
+      const x = e.clientX - dragOffset.current.x;
+      const y = e.clientY - dragOffset.current.y;
+      setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, x, y } : n)));
+      send({ type: "node-move", id, x, y });
+    }
+    function onMouseUp() {
+      dragId.current = null;
+    }
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [nodes]);
+
+  function handleNodeCodeChange(id: string, code: string) {
+    setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, code } : n)));
+    send({ type: "node-edit", id, code });
+  }
+
+  function handleNodeClose(id: string) {
+    setNodes((prev) => prev.filter((n) => n.id !== id));
+    send({ type: "node-close", id });
   }
 
   function handleShare() {
@@ -186,19 +262,31 @@ export default function App() {
         savedUrl={savedUrl}
         onShare={handleShare}
         copied={copied}
+        onAddCodeNode={handleAddCodeNode}
       />
 
-      <canvas
-        ref={canvasRef}
-        className="flex-1 touch-none cursor-crosshair bg-white"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={stopDrawing}
-        onMouseLeave={stopDrawing}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={stopDrawing}
-      />
+      <div className="relative flex-1 overflow-hidden">
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 h-full w-full touch-none cursor-crosshair bg-white"
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={stopDrawing}
+          onMouseLeave={stopDrawing}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={stopDrawing}
+        />
+        {nodes.map((node) => (
+          <CodeNode
+            key={node.id}
+            node={node}
+            onDragStart={handleNodeDragStart}
+            onCodeChange={handleNodeCodeChange}
+            onClose={handleNodeClose}
+          />
+        ))}
+      </div>
     </div>
   );
 }

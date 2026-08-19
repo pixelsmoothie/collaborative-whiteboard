@@ -13,6 +13,7 @@ type Props = {
   savedUrl: string | null;
   onShare: () => void;
   copied: boolean;
+  onAddCodeNode: () => void;
 };
 
 export default function Toolbar({
@@ -28,6 +29,7 @@ export default function Toolbar({
   savedUrl,
   onShare,
   copied,
+  onAddCodeNode,
 }: Props) {
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3">
@@ -69,6 +71,12 @@ export default function Toolbar({
       </label>
 
       <div className="ml-auto flex items-center gap-2">
+        <button
+          onClick={onAddCodeNode}
+          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100"
+        >
+          + Code Node
+        </button>
         <button
           onClick={onShare}
           className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100"
