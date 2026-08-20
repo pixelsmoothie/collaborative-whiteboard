@@ -10,3 +10,5 @@ backend/target/
 # os
 .DS_Store
 Thumbs.db
+annotated/
+EXPLAIN.md
